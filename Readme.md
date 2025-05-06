@@ -1,4 +1,4 @@
-### A guide of creating Mongo cluster and running sharded MongoDB with Docker Compose. It is assumed that Docker Desktop is already installed. A folder structure should be the same in project.
+### A guide of creating Mongo cluster and running sharded MongoDB with Docker Compose. It is assumed that Docker Desktop is already installed. A folder structure should be the same as in project.
 
 Examples tested in PowerShell
 
