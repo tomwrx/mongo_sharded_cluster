@@ -1,0 +1,43 @@
+services:
+  # Config Server
+  configsvr1:
+    image: mongo
+    container_name: configsvr1
+    command: mongod --configsvr --replSet configReplSet --port 27019
+    volumes:
+      - ./configsvr1/data:/data/db
+    ports:
+      - "27019:27019"
+
+  # Shard 1
+  shard1:
+    image: mongo
+    container_name: shard1
+    command: mongod --shardsvr --replSet shard1ReplSet --port 27018
+    volumes:
+      - ./shard1/data:/data/db
+    ports:
+      - "27018:27018"
+
+  # Shard 2
+  shard2:
+    image: mongo
+    container_name: shard2
+    command: mongod --shardsvr --replSet shard2ReplSet --port 27020
+    volumes:
+      - ./shard2/data:/data/db
+    ports:
+      - "27020:27020"
+
+  # mongos router
+  mongos:
+    image: mongo
+    container_name: mongos
+    depends_on:
+      - configsvr1
+      - shard1
+      - shard2
+    command: >
+      bash -c " sleep 10 && mongos --configdb configReplSet/configsvr1:27019 --port 27017 --bind_ip_all"
+    ports:
+      - "27017:27017"
