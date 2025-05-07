@@ -96,3 +96,26 @@ should return somnething like:
 - You must not have the same database on multiple shards before adding them.
 - mongos must be bound to all IPs using `--bind_ip_all`.
 - Shards must be initiated **before** adding to mongos.
+
+
+### An error simulation guidlines
+
+1. Connecto to ```mongos```
+```bash
+docker exec -it mongos mongosh
+use ais_tracking
+db.positions.countDocuments({ mmsi: { $exists: true } })
+```
+
+2. Failure simulation
+
+```bash
+docker stop shard2
+```
+
+3. We need to run the same query (step 1) again via mongos. It should still return results, assuming shard1 has part of the data.
+
+4. Restore the shard
+```bash
+docker start shard2
+```
