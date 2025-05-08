@@ -98,7 +98,7 @@ should return somnething like:
 - Shards must be initiated **before** adding to mongos.
 
 
-### An error simulation guidlines
+### An error simulation guidelines
 
 1. Connecto to ```mongos```
 ```bash
