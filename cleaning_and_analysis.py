@@ -9,16 +9,25 @@ from pymongo.errors import BulkWriteError
 
 def clean_chunk(df_chunk):
     df_chunk = pd.DataFrame(df_chunk)
-    df_chunk = df_chunk[~df_chunk['nav_status'].isin(['Moored', 'At anchor', 'Reserved for future use'])]
-    df_chunk = df_chunk.dropna(subset=['mmsi', 'lat', 'lon', 'timestamp', 'sog', 'cog']).copy()
-    df_chunk = df_chunk[(df_chunk['lat'] >= -90) & (df_chunk['lat'] <= 90) & (df_chunk['lon'] >= -180) & (df_chunk['lon'] <= 180)]
-    df_chunk = df_chunk[df_chunk['sog'] > 0]
-    df_chunk['lat'] = pd.to_numeric(df_chunk['lat'], errors='coerce')
-    df_chunk['lon'] = pd.to_numeric(df_chunk['lon'], errors='coerce')
-    df_chunk['sog'] = pd.to_numeric(df_chunk['sog'], errors='coerce')
-    df_chunk['cog'] = pd.to_numeric(df_chunk['cog'], errors='coerce')
-    df_chunk['timestamp'] = pd.to_datetime(df_chunk['timestamp'], errors='coerce')
-    df_chunk = df_chunk.dropna(subset=['lat', 'lon', 'sog', 'cog', 'timestamp'])
+    df_chunk = df_chunk[
+        ~df_chunk["nav_status"].isin(["Moored", "At anchor", "Reserved for future use"])
+    ]
+    df_chunk = df_chunk.dropna(
+        subset=["mmsi", "lat", "lon", "timestamp", "sog", "cog"]
+    ).copy()
+    df_chunk = df_chunk[
+        (df_chunk["lat"] >= -90)
+        & (df_chunk["lat"] <= 90)
+        & (df_chunk["lon"] >= -180)
+        & (df_chunk["lon"] <= 180)
+    ]
+    df_chunk = df_chunk[df_chunk["sog"] > 0]
+    df_chunk["lat"] = pd.to_numeric(df_chunk["lat"], errors="coerce")
+    df_chunk["lon"] = pd.to_numeric(df_chunk["lon"], errors="coerce")
+    df_chunk["sog"] = pd.to_numeric(df_chunk["sog"], errors="coerce")
+    df_chunk["cog"] = pd.to_numeric(df_chunk["cog"], errors="coerce")
+    df_chunk["timestamp"] = pd.to_datetime(df_chunk["timestamp"], errors="coerce")
+    df_chunk = df_chunk.dropna(subset=["lat", "lon", "sog", "cog", "timestamp"])
     return df_chunk
 
 
@@ -27,7 +36,9 @@ def load_and_clean_data_parallel(collection, batch_size=100000, num_processes=No
         num_processes = max(1, mp.cpu_count() - 1)
 
     total_docs = collection.estimated_document_count()
-    print(f"Processing {total_docs} documents in chunks of {batch_size} using {num_processes} processes...")
+    print(
+        f"Processing {total_docs} documents in chunks of {batch_size} using {num_processes} processes..."
+    )
 
     all_cleaned_data = []
     pool = mp.Pool(num_processes)
@@ -50,8 +61,8 @@ def load_and_clean_data_parallel(collection, batch_size=100000, num_processes=No
 
 
 def compute_group_delta_t(group):
-    group = group.sort_values('timestamp')
-    delta_t = group['timestamp'].diff().dt.total_seconds() * 1000
+    group = group.sort_values("timestamp")
+    delta_t = group["timestamp"].diff().dt.total_seconds() * 1000
     return delta_t.dropna().tolist()
 
 
@@ -67,7 +78,7 @@ def compute_delta_t_parallel(groups, num_processes=None):
 
 
 def filter_vessels(df, min_points=100):
-    grouped = df.groupby('mmsi')
+    grouped = df.groupby("mmsi")
     filtered_groups = [group for mmsi, group in grouped if len(group) >= min_points]
     print(f"Vessels with >= {min_points} points: {len(filtered_groups)}")
     return filtered_groups
@@ -79,15 +90,33 @@ def plot_histogram(delta_t_list, output_path="delta_t_histogram.png"):
         return
     delta_t_array = np.array(delta_t_list)
     plt.figure(figsize=(10, 6))
-    plt.hist(delta_t_array, bins=50, edgecolor='black')
-    plt.title('Histogram of Delta t (milliseconds)')
-    plt.xlabel('Delta t (ms)')
-    plt.ylabel('Frequency')
+    plt.hist(delta_t_array, bins=50, edgecolor="black")
+    plt.title("Histogram of Delta t (milliseconds)")
+    plt.xlabel("Delta t (ms)")
+    plt.ylabel("Frequency")
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(output_path)
     print(f"Histogram saved as {output_path}")
     plt.close()
+
+
+def plot_histogram2(delta_t_list):
+
+    delta_t_array = np.array(delta_t_list)
+    delta_t_array = delta_t_array[delta_t_array < np.percentile(delta_t_array, 99)]
+
+    plt.figure(figsize=(10, 6))
+    plt.hist(delta_t_array, bins=100, edgecolor="black")
+    plt.ticklabel_format(axis="y", style="plain")
+    plt.title("Delta t Histogram (99th percentile)")
+    plt.xlabel("Delta t (ms)")
+    plt.ylabel("Frequency")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("filtered_delta_t_histogram99.png")
+    print("Histogram saved as filtered_delta_t_histogram99.png")
+    plt.show()
 
 
 def main():
@@ -109,9 +138,9 @@ def main():
         client.close()
         return
 
-    records = pd.concat(filtered_groups).to_dict(orient='records')
+    records = pd.concat(filtered_groups).to_dict(orient="records")
     for record in records:
-        record.pop('_id', None)  # Remove existing _id to avoid duplicate key errors
+        record.pop("_id", None)  # Remove existing _id to avoid duplicate key errors
 
     try:
         cleaned_collection.insert_many(records, ordered=False)
@@ -124,8 +153,16 @@ def main():
 
     all_delta_t = compute_delta_t_parallel(filtered_groups)
     plot_histogram(all_delta_t, output_path="delta_t_histogram.png")
-
+    plot_histogram2(all_delta_t)
     client.close()
+
 
 if __name__ == "__main__":
     main()
+# Histogram analysis for 2025-03-05 aisk data
+
+# although time between subsequent data points varies, the 99 percentile histogram shows
+# that for most cases records are made within 3 minutes for a vehicle.
+# However, the histogram containing all calculations indicates
+# that some outliers appear with exceptionally long time periods between records.
+# Additional analysis could be done to investigate those outlier cases.
